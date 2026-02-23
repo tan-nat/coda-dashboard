@@ -308,61 +308,87 @@ function renderuj(stats, ranking, mapa, bezAkt) {
   </div>`;
 
   // ── Ranking ──
-  const rankingArr = Array.isArray(ranking) ? ranking : [];
+  // Sortowanie: poprzedni tydzień (zawsze kompletny) jako główna kolumna
+  const rankingArr = (Array.isArray(ranking) ? ranking : [])
+    .sort((a, b) => (b.poprz_wizyty||0) - (a.poprz_wizyty||0) || (b.wizyty||0) - (a.wizyty||0));
+
+  // Top wg poprzedniego tygodnia
+  const topPoprzedni = rankingArr.find(r => (r.poprz_wizyty||0) > 0);
+
   html += `<div class="card">
     <div class="card-title">🥇 Ranking Handlowców</div>
-    <p style="font-size:12px;color:#94a3b8;margin-bottom:14px;">Główna metryka: <b>liczba wizyt</b> (szybki status) · Efekty: HL/COLD/SOLD jako kontekst</p>
+    <p style="font-size:12px;color:#94a3b8;margin-bottom:14px;">
+      Główna metryka: <b>liczba wizyt</b> (szybki status) &nbsp;·&nbsp;
+      Sortowanie wg <b>poprzedniego tygodnia</b> (${z.poprzedni_pon||''} – ${z.poprzedni_ndz||''})
+    </p>
     <table>
       <thead><tr>
         <th style="width:36px;text-align:center;">#</th>
         <th>Handlowiec</th>
-        <th style="text-align:center;">Wizyty<br><small>poprzedni</small></th>
-        <th style="text-align:center;">Wizyty<br><small>obecny</small></th>
+        <th style="text-align:center;background:#f1f5f9;border-radius:6px;">Wizyty<br><small style="color:#7c3aed;font-weight:700;">poprzedni ★</small></th>
+        <th style="text-align:center;">HL/COLD/SOLD<br><small>poprzedni</small></th>
+        <th style="text-align:center;color:#64748b;">Tagi poprzedni</th>
+        <th style="text-align:center;border-left:2px solid #e2e8f0;">Wizyty<br><small>bieżący</small></th>
         <th style="text-align:center;">Δ</th>
-        <th style="text-align:center;color:#16a34a;">% Skutecz.</th>
-        <th>Tagi szybkiego statusu</th>
-        <th>Efekty</th>
+        <th style="text-align:center;color:#16a34a;">% Skutecz.<br><small>bieżący</small></th>
+        <th>Tagi bieżący</th>
       </tr></thead>
       <tbody>
         ${rankingArr.map((r, i) => {
-          const brak  = (r.wizyty||0) === 0;
-          const isTop = i === 0 && !brak;
-          const delta = (r.wizyty||0) - (r.poprz_wizyty||0);
-          const dk    = delta > 0 ? '#16a34a' : delta < 0 ? '#dc2626' : '#94a3b8';
-          const di    = delta > 0 ? `▲ ${delta}` : delta < 0 ? `▼ ${Math.abs(delta)}` : '—';
-          const skut  = (r.wizyty||0) > 0 ? (((r.sold||0) / r.wizyty) * 100).toFixed(1) : null;
-          const skutKol = skut === null ? '#94a3b8' : parseFloat(skut) >= 10 ? '#16a34a' : parseFloat(skut) >= 5 ? '#d97706' : '#94a3b8';
-          const rowBg = brak ? '#fef2f2' : '';
+          const brakObecny   = (r.wizyty||0) === 0;
+          const brakObydwu   = brakObecny && (r.poprz_wizyty||0) === 0;
+          const isTop        = topPoprzedni && r.osoba === topPoprzedni.osoba;
+          const delta        = (r.wizyty||0) - (r.poprz_wizyty||0);
+          const dk           = delta > 0 ? '#16a34a' : delta < 0 ? '#dc2626' : '#94a3b8';
+          const di           = delta > 0 ? '▲ '+delta : delta < 0 ? '▼ '+Math.abs(delta) : '—';
+          const rowBg        = brakObydwu ? '#fef2f2' : i % 2 === 0 ? 'white' : '#fafbfc';
 
-          const tagi = r.tagi && typeof r.tagi === 'object'
+          // % skuteczności wg BIEŻĄCEGO (lub poprzedniego jeśli bieżący pusty)
+          const wizytySkut = r.wizyty > 0 ? r.wizyty : r.poprz_wizyty;
+          const soldSkut   = r.wizyty > 0 ? (r.sold||0) : (r.poprz_sold||0);
+          const skut       = wizytySkut > 0 ? ((soldSkut / wizytySkut) * 100).toFixed(1) : null;
+          const skutKol    = skut === null ? '#94a3b8' : parseFloat(skut) >= 10 ? '#16a34a' : parseFloat(skut) >= 5 ? '#d97706' : '#94a3b8';
+
+          // Tagi poprzedni
+          const tagiPoprzedni = r.tagi_poprzedni && typeof r.tagi_poprzedni === 'object'
+            ? Object.entries(r.tagi_poprzedni).sort((a,b)=>b[1]-a[1]).map(([t,c])=>tagBadge(t,c)).join('')
+            : '<span style="color:#cbd5e1;font-size:11px;">brak</span>';
+
+          // Tagi bieżący
+          const tagiBiezacy = r.tagi && typeof r.tagi === 'object'
             ? Object.entries(r.tagi).sort((a,b)=>b[1]-a[1]).map(([t,c])=>tagBadge(t,c)).join('')
-            : '<span style="color:#cbd5e1;">brak</span>';
+            : '<span style="color:#cbd5e1;font-size:11px;">—</span>';
 
-          const efekty = [
-            (r.hl||0)   > 0 ? `<span class="badge badge-hl">HL ${r.hl}</span>`     : '',
-            (r.cold||0) > 0 ? `<span class="badge badge-cold">COLD ${r.cold}</span>` : '',
-            (r.sold||0) > 0 ? `<span class="badge badge-sold">SOLD ${r.sold}</span>` : '',
-            (r.inne||0) > 0 ? `<span class="badge badge-inne">inne ${r.inne}</span>` : ''
+          // Efekty poprzedni
+          const efPoprzedni = [
+            (r.poprz_hl||0)   > 0 ? '<span class="badge badge-hl">HL '+r.poprz_hl+'</span>'     : '',
+            (r.poprz_cold||0) > 0 ? '<span class="badge badge-cold">COLD '+r.poprz_cold+'</span>' : '',
+            (r.poprz_sold||0) > 0 ? '<span class="badge badge-sold">SOLD '+r.poprz_sold+'</span>' : ''
           ].filter(Boolean).join('') || '<span style="color:#cbd5e1;">—</span>';
 
-          return `<tr style="background:${rowBg}">
-            <td style="text-align:center;color:#94a3b8;font-weight:700;">${i+1}</td>
-            <td style="font-weight:700;">
-              ${escHtml(r.osoba)}
-              ${isTop ? '<span class="badge-top">TOP</span>' : ''}
-              ${brak  ? '<span class="badge-brak">BRAK</span>' : ''}
-            </td>
-            <td style="text-align:center;color:#94a3b8;">${r.poprz_wizyty||0}</td>
-            <td style="text-align:center;font-weight:800;font-size:18px;color:${brak?'#ef4444':'#0f172a'};">${r.wizyty||0}</td>
-            <td style="text-align:center;color:${dk};font-weight:700;">${di}</td>
-            <td style="text-align:center;">
-              ${skut !== null
-                ? `<span style="background:${skutKol}18;color:${skutKol};border:1px solid ${skutKol}44;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:700;">${skut}%</span>`
-                : '<span style="color:#cbd5e1;">—</span>'}
-            </td>
-            <td>${tagi}</td>
-            <td>${efekty}</td>
-          </tr>`;
+          return '<tr style="border-bottom:1px solid #f8fafc;background:'+rowBg+'">'+
+            '<td style="padding:9px 10px;text-align:center;color:#94a3b8;font-weight:700;">'+( i+1)+'</td>'+
+            '<td style="padding:9px 10px;font-weight:700;">'+
+              escHtml(r.osoba)+
+              (isTop ? '<span class="badge-top">TOP</span>' : '')+
+              (brakObydwu ? '<span class="badge-brak">BRAK</span>' : '')+
+            '</td>'+
+            '<td style="padding:9px 10px;text-align:center;font-weight:800;font-size:20px;color:#7c3aed;background:#faf5ff;">'+
+              (r.poprz_wizyty||0)+
+            '</td>'+
+            '<td style="padding:9px 10px;">'+efPoprzedni+'</td>'+
+            '<td style="padding:9px 10px;">'+tagiPoprzedni+'</td>'+
+            '<td style="padding:9px 10px;text-align:center;font-weight:800;font-size:18px;border-left:2px solid #e2e8f0;color:'+(brakObecny?'#94a3b8':'#0f172a')+';">'+
+              (r.wizyty||0)+
+            '</td>'+
+            '<td style="padding:9px 10px;text-align:center;color:'+dk+';font-weight:700;">'+di+'</td>'+
+            '<td style="padding:9px 10px;text-align:center;">'+
+              (skut !== null
+                ? '<span style="background:'+skutKol+'18;color:'+skutKol+';border:1px solid '+skutKol+'44;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:700;">'+skut+'%</span>'
+                : '<span style="color:#cbd5e1;">—</span>')+
+            '</td>'+
+            '<td style="padding:9px 10px;">'+tagiBiezacy+'</td>'+
+          '</tr>';
         }).join('')}
       </tbody>
     </table>
