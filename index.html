@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📊 Dashboard CODA</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f172a; color: #1e293b; }
+  .wrap { max-width: 1100px; margin: 0 auto; background: #f1f5f9; min-height: 100vh; }
+
+  /* Nagłówek */
+  .header { background: linear-gradient(135deg,#0f172a 0%,#1e3a8a 60%,#1d4ed8 100%); padding: 28px 32px; color: white; }
+  .header h1 { font-size: 26px; font-weight: 800; margin-bottom: 6px; }
+  .header p  { font-size: 13px; opacity: .65; }
+
+  /* Loading / error */
+  .loader { text-align: center; padding: 80px; color: #94a3b8; font-size: 18px; }
+  .error  { background: #fef2f2; border: 2px solid #fca5a5; border-radius: 12px; padding: 20px; margin: 20px; color: #991b1b; }
+
+  /* Karty */
+  .card { background: white; border-radius: 14px; box-shadow: 0 2px 8px rgba(0,0,0,.06); margin: 16px; padding: 20px 24px; }
+  .card-title { font-size: 15px; font-weight: 700; color: #0f172a; padding-bottom: 10px; border-bottom: 1px solid #f1f5f9; margin-bottom: 14px; }
+
+  /* Statystyki */
+  .stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; background: white; border-radius: 14px; box-shadow: 0 2px 8px rgba(0,0,0,.06); margin: 16px; overflow: hidden; }
+  .stat-cell { padding: 18px 16px; border-right: 1px solid #e2e8f0; }
+  .stat-cell:last-child { border-right: none; }
+  .stat-label { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: .6px; font-weight: 700; margin-bottom: 6px; }
+  .stat-num   { font-size: 30px; font-weight: 800; line-height: 1; margin-bottom: 4px; }
+  .stat-sub   { font-size: 11px; color: #64748b; }
+
+  .hl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; background: white; border-radius: 14px; box-shadow: 0 2px 8px rgba(0,0,0,.06); margin: 16px; overflow: hidden; }
+  .hl-cell { padding: 18px 24px; border-right: 1px solid #e2e8f0; }
+  .hl-cell:last-child { border-right: none; }
+  .hl-big  { font-size: 48px; font-weight: 800; line-height: 1; }
+  .hl-bar  { background: #e2e8f0; border-radius: 6px; height: 8px; margin-top: 10px; }
+  .hl-bar-fill { background: linear-gradient(90deg,#3b82f6,#1d4ed8); height: 8px; border-radius: 6px; transition: width .6s; }
+
+  /* Alert */
+  .alert { margin: 16px; background: #fef2f2; border: 2px solid #fca5a5; border-radius: 12px; padding: 14px 20px; display: flex; align-items: flex-start; gap: 12px; }
+  .alert-icon { font-size: 20px; }
+  .alert-title { font-weight: 700; color: #991b1b; font-size: 14px; margin-bottom: 3px; }
+  .alert-body  { font-size: 13px; color: #b91c1c; }
+
+  /* Top performer */
+  .top-performer { margin: 16px; background: linear-gradient(135deg,#fef9c3,#fde68a); border: 2px solid #f59e0b; border-radius: 12px; padding: 14px 20px; display: flex; align-items: center; gap: 16px; }
+  .tp-icon  { font-size: 36px; }
+  .tp-label { font-size: 11px; color: #92400e; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; }
+  .tp-name  { font-size: 22px; font-weight: 800; color: #78350f; }
+  .tp-sub   { font-size: 13px; color: #92400e; }
+
+  /* Tabela rankingu */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { padding: 9px 10px; text-align: left; border-bottom: 2px solid #e2e8f0; color: #64748b; font-size: 11px; background: #f8fafc; }
+  td { padding: 9px 10px; border-bottom: 1px solid #f8fafc; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tr:nth-child(even) td { background: #fafbfc; }
+
+  /* Badge */
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-right: 3px; margin-bottom: 2px; white-space: nowrap; }
+  .badge-cnt { display: inline-block; border-radius: 3px; padding: 0 4px; margin-left: 3px; font-size: 11px; }
+  .badge-hl   { background: #dbeafe; color: #1d4ed8; }
+  .badge-cold { background: #cffafe; color: #0e7490; }
+  .badge-sold { background: #dcfce7; color: #15803d; }
+  .badge-inne { background: #f1f5f9; color: #64748b; }
+  .badge-top  { background: #f59e0b; color: white; font-size: 9px; padding: 1px 6px; border-radius: 8px; margin-left: 6px; }
+  .badge-brak { background: #ef4444; color: white; font-size: 9px; padding: 1px 6px; border-radius: 8px; margin-left: 6px; }
+
+  /* Mapa terytorialna */
+  .ph-block { margin-bottom: 16px; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+  .ph-header { background: #1e293b; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; }
+  .ph-name   { font-size: 14px; font-weight: 700; color: white; }
+  .ph-avg    { font-size: 11px; color: #cbd5e1; background: rgba(255,255,255,.1); padding: 4px 10px; border-radius: 20px; }
+
+  .dni-row { margin-bottom: 2px; white-space: nowrap; font-size: 11px; }
+  .dni-date { font-weight: 700; color: #f59e0b; }
+  .dni-time { color: #0f172a; }
+  .dni-dur  { color: #94a3b8; font-size: 10px; }
+
+  /* Odświeżanie */
+  .refresh-bar { background: #1e3a8a; color: white; padding: 8px 16px; font-size: 12px; text-align: right; cursor: pointer; }
+  .refresh-bar:hover { background: #1d4ed8; }
+
+  /* Responsywność */
+  @media (max-width: 700px) {
+    .stats-grid { grid-template-columns: 1fr 1fr; }
+    .hl-grid    { grid-template-columns: 1fr; }
+    .stat-cell:nth-child(2n) { border-right: none; }
+    .stat-cell { border-bottom: 1px solid #e2e8f0; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <p style="font-size:12px;opacity:.6;text-transform:uppercase;letter-spacing:2px;margin-bottom:4px;">Dashboard Sprzedaży</p>
+    <h1>📊 CODA – Dashboard</h1>
+    <p id="header-dates">Ładowanie danych...</p>
+  </div>
+
+  <div class="refresh-bar" onclick="ladujDane()">
+    🔄 Odśwież dane &nbsp;|&nbsp; <span id="last-refresh">–</span>
+  </div>
+
+  <div id="root"><div class="loader">⏳ Ładowanie danych z bazy...</div></div>
+
+</div>
+
+<script>
+// ─── KONFIGURACJA ───────────────────────────────────────────────────────────
+const SUPABASE_URL  = 'https://lzykrjkcdlkkdfitdvqj.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx6eWtyamtjZGxra2RmaXRkdnFqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4MzM1MTcsImV4cCI6MjA4NzQwOTUxN30.zpNaAUivumls8uKVSYlf4k7X_BFvcpNRiQ2j2IYwj_A'; // Anon key (tylko odczyt)
+// ───────────────────────────────────────────────────────────────────────────
+
+// Paleta kolorów tagów (deterministyczna)
+const PALETA = [
+  {bg:'#fce7f3',tx:'#9d174d',br:'#fbcfe8'},{bg:'#ede9fe',tx:'#5b21b6',br:'#ddd6fe'},
+  {bg:'#fff7ed',tx:'#9a3412',br:'#fed7aa'},{bg:'#ecfdf5',tx:'#065f46',br:'#a7f3d0'},
+  {bg:'#fef9c3',tx:'#713f12',br:'#fde68a'},{bg:'#e0f2fe',tx:'#075985',br:'#bae6fd'},
+  {bg:'#fef2f2',tx:'#991b1b',br:'#fecaca'},{bg:'#f0fdf4',tx:'#166534',br:'#bbf7d0'},
+  {bg:'#f5f3ff',tx:'#4c1d95',br:'#ddd6fe'},{bg:'#fff1f2',tx:'#9f1239',br:'#fecdd3'},
+  {bg:'#f0fdfa',tx:'#134e4a',br:'#99f6e4'},{bg:'#fdf4ff',tx:'#701a75',br:'#f5d0fe'},
+  {bg:'#fffbeb',tx:'#78350f',br:'#fde68a'},{bg:'#f0f9ff',tx:'#0c4a6e',br:'#bae6fd'},
+  {bg:'#fafafa',tx:'#374151',br:'#e5e7eb'}
+];
+
+function kolorTagu(tag) {
+  let h = 0;
+  for (let i = 0; i < tag.length; i++) h = (h + tag.charCodeAt(i)) & 0xffff;
+  return PALETA[h % PALETA.length];
+}
+
+function tagBadge(tag, cnt) {
+  const c = kolorTagu(tag);
+  return `<span class="badge" style="background:${c.bg};color:${c.tx};border:1px solid ${c.br};">
+    ${escHtml(tag)}<span class="badge-cnt" style="background:${c.tx};color:${c.bg};">${cnt}</span>
+  </span>`;
+}
+
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function fmtCzas(sek) {
+  const h = Math.floor(sek / 3600);
+  const m = Math.floor((sek % 3600) / 60);
+  return `${h}h ${m}m`;
+}
+
+function obliczProcentZmiany(teraz, poprz) {
+  if (poprz === 0) return teraz > 0 ? 100 : 0;
+  return ((teraz - poprz) / poprz) * 100;
+}
+
+// ─── POBIERANIE DANYCH ─────────────────────────────────────────────────────
+
+async function rpc(fnName) {
+  const resp = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fnName}`, {
+    method: 'POST',
+    headers: {
+      'apikey':        SUPABASE_ANON,
+      'Authorization': `Bearer ${SUPABASE_ANON}`,
+      'Content-Type':  'application/json'
+    },
+    body: '{}'
+  });
+  if (!resp.ok) throw new Error(`RPC ${fnName}: ${resp.status}`);
+  return resp.json();
+}
+
+async function ladujDane() {
+  document.getElementById('root').innerHTML = '<div class="loader">⏳ Pobieranie danych...</div>';
+  document.getElementById('last-refresh').textContent = '…';
+
+  try {
+    // Równoległe zapytania – wszystkie naraz
+    const [stats, ranking, mapa, bezAkt] = await Promise.all([
+      rpc('get_statystyki'),
+      rpc('get_ranking'),
+      rpc('get_mapa_terytorialna'),
+      rpc('get_bez_aktywnosci')
+    ]);
+
+    renderuj(stats, ranking, mapa, bezAkt);
+    const teraz = new Date().toLocaleTimeString('pl-PL');
+    document.getElementById('last-refresh').textContent = `Ostatnie odświeżenie: ${teraz}`;
+
+    const z = stats.zakresy || {};
+    document.getElementById('header-dates').textContent =
+      `Tydzień bieżący: ${z.obecny_pon || ''} – dziś · Poprzedni: ${z.poprzedni_pon || ''} – ${z.poprzedni_ndz || ''}`;
+
+  } catch (e) {
+    document.getElementById('root').innerHTML =
+      `<div class="error">❌ Błąd ładowania danych: ${escHtml(e.message)}<br><br>
+       Sprawdź SUPABASE_URL i SUPABASE_ANON w pliku dashboard.html</div>`;
+    console.error(e);
+  }
+}
+
+// ─── RENDEROWANIE ──────────────────────────────────────────────────────────
+
+function renderuj(stats, ranking, mapa, bezAkt) {
+  const ob  = stats.obecny    || {};
+  const pop = stats.poprzedni || {};
+  const wc  = stats.wczoraj   || {};
+  const z   = stats.zakresy   || {};
+
+  const roznica     = (ob.total||0) - (pop.total||0);
+  const trendKolor  = roznica >= 0 ? '#16a34a' : '#dc2626';
+  const trendIkona  = roznica >= 0 ? '▲' : '▼';
+  const pct         = obliczProcentZmiany(ob.total||0, pop.total||0);
+
+  const dniWMies    = z.dni_w_miesiacu || 30;
+  const dniMineło   = z.dzien_miesiaca || 1;
+  const postepMies  = Math.round((dniMineło / dniWMies) * 100);
+
+  let html = '';
+
+  // ── Alert brak aktywności ──
+  if (Array.isArray(bezAkt) && bezAkt.length > 0) {
+    html += `<div class="alert">
+      <div class="alert-icon">🚨</div>
+      <div>
+        <div class="alert-title">Brak aktywności w bieżącym tygodniu – wymaga reakcji</div>
+        <div class="alert-body">${bezAkt.map(escHtml).join(' · ')}</div>
+      </div>
+    </div>`;
+  }
+
+  // ── Top performer ──
+  const topPerf = Array.isArray(ranking) && ranking.length > 0 ? ranking[0] : null;
+  if (topPerf && topPerf.wizyty > 0) {
+    html += `<div class="top-performer">
+      <div class="tp-icon">🏆</div>
+      <div>
+        <div class="tp-label">TOP PERFORMER – bieżący tydzień (wg wizyt)</div>
+        <div class="tp-name">${escHtml(topPerf.osoba)}</div>
+        <div class="tp-sub"><b>${topPerf.wizyty}</b> wizyt &ensp;|&ensp; HL: <b>${topPerf.hl||0}</b> &ensp; COLD: <b>${topPerf.cold||0}</b> &ensp; SOLD: <b>${topPerf.sold||0}</b></div>
+      </div>
+    </div>`;
+  }
+
+  // ── Statystyki ──
+  html += `<div class="stats-grid">
+    <div class="stat-cell">
+      <div class="stat-label">⚡ Wczoraj (${wc.data||''})</div>
+      <div class="stat-num" style="color:#0369a1;">${(wc.hl||0)+(wc.cold||0)}</div>
+      <div class="stat-sub">
+        <span class="badge badge-hl">HL ${wc.hl||0}</span>
+        <span class="badge badge-cold">COLD ${wc.cold||0}</span>
+      </div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-label">📅 Bieżący tydzień</div>
+      <div class="stat-num" style="color:#7c3aed;">${ob.total||0}</div>
+      <div class="stat-sub">${z.obecny_pon||''} – dziś · vs ${pop.total||0} poprzedni</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-label">🟢 Sprzedaże</div>
+      <div class="stat-num" style="color:#16a34a;">${ob.sold||ob.SOLD||0}</div>
+      <div class="stat-sub">bieżący · vs ${pop.sold||pop.SOLD||0} poprzedni</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-label">📈 Tydzień / Tydzień</div>
+      <div class="stat-num" style="color:${trendKolor};">${trendIkona} ${Math.abs(roznica)}</div>
+      <div class="stat-sub">${pop.total||0} → ${ob.total||0} &nbsp; (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)</div>
+    </div>
+    <div class="stat-cell" style="padding:14px;">
+      <div class="stat-label" style="margin-bottom:6px;">Rozkład statusów</div>
+      <table style="font-size:12px;width:100%;">
+        ${['HL','COLD','SOLD','inne'].map(s => {
+          const o = ob[s]||ob[s.toLowerCase()]||0;
+          const p = pop[s]||pop[s.toLowerCase()]||0;
+          const r = o - p;
+          const cl = r>=0?'#16a34a':'#dc2626';
+          const dot = s==='HL'?'#2563eb':s==='COLD'?'#0891b2':s==='SOLD'?'#16a34a':'#94a3b8';
+          return `<tr>
+            <td><span style="display:inline-block;width:7px;height:7px;background:${dot};border-radius:50%;margin-right:4px;"></span>${s}</td>
+            <td style="text-align:right;color:#94a3b8;">${p}</td>
+            <td style="text-align:right;font-weight:700;color:${dot};">${o}</td>
+            <td style="text-align:right;color:${cl};white-space:nowrap;">${r>0?'▲+':'▼'}${r}</td>
+          </tr>`;
+        }).join('')}
+      </table>
+    </div>
+  </div>`;
+
+  // ── HL liczniki ──
+  html += `<div class="hl-grid">
+    <div class="hl-cell">
+      <div class="stat-label">🔵 HL Ogółem – cała baza</div>
+      <div class="hl-big" style="color:#1d4ed8;">${stats.hl_ogolem||0}</div>
+      <div style="font-size:12px;color:#64748b;margin-top:4px;">wszystkich rekordów ze statusem HL</div>
+    </div>
+    <div class="hl-cell">
+      <div class="stat-label">📅 HL w bieżącym miesiącu – ${z.miesiac_nazwa||''}</div>
+      <div class="hl-big" style="color:#2563eb;">${stats.hl_miesiac||0}</div>
+      <div style="font-size:12px;color:#64748b;margin-top:4px;">
+        Dzień ${dniMineło} z ${dniWMies} · ~${Math.round((stats.hl_miesiac||0)/Math.max(dniMineło,1))} HL/dzień
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#94a3b8;margin-top:8px;">
+        <span>Postęp miesiąca</span><span><b>${postepMies}%</b></span>
+      </div>
+      <div class="hl-bar"><div class="hl-bar-fill" style="width:${postepMies}%"></div></div>
+    </div>
+  </div>`;
+
+  // ── Ranking ──
+  const rankingArr = Array.isArray(ranking) ? ranking : [];
+  html += `<div class="card">
+    <div class="card-title">🥇 Ranking Handlowców</div>
+    <p style="font-size:12px;color:#94a3b8;margin-bottom:14px;">Główna metryka: <b>liczba wizyt</b> (szybki status) · Efekty: HL/COLD/SOLD jako kontekst</p>
+    <table>
+      <thead><tr>
+        <th style="width:36px;text-align:center;">#</th>
+        <th>Handlowiec</th>
+        <th style="text-align:center;">Wizyty<br><small>poprzedni</small></th>
+        <th style="text-align:center;">Wizyty<br><small>obecny</small></th>
+        <th style="text-align:center;">Δ</th>
+        <th style="text-align:center;color:#16a34a;">% Skutecz.</th>
+        <th>Tagi szybkiego statusu</th>
+        <th>Efekty</th>
+      </tr></thead>
+      <tbody>
+        ${rankingArr.map((r, i) => {
+          const brak  = (r.wizyty||0) === 0;
+          const isTop = i === 0 && !brak;
+          const delta = (r.wizyty||0) - (r.poprz_wizyty||0);
+          const dk    = delta > 0 ? '#16a34a' : delta < 0 ? '#dc2626' : '#94a3b8';
+          const di    = delta > 0 ? `▲ ${delta}` : delta < 0 ? `▼ ${Math.abs(delta)}` : '—';
+          const skut  = (r.wizyty||0) > 0 ? (((r.sold||0) / r.wizyty) * 100).toFixed(1) : null;
+          const skutKol = skut === null ? '#94a3b8' : parseFloat(skut) >= 10 ? '#16a34a' : parseFloat(skut) >= 5 ? '#d97706' : '#94a3b8';
+          const rowBg = brak ? '#fef2f2' : '';
+
+          const tagi = r.tagi && typeof r.tagi === 'object'
+            ? Object.entries(r.tagi).sort((a,b)=>b[1]-a[1]).map(([t,c])=>tagBadge(t,c)).join('')
+            : '<span style="color:#cbd5e1;">brak</span>';
+
+          const efekty = [
+            (r.hl||0)   > 0 ? `<span class="badge badge-hl">HL ${r.hl}</span>`     : '',
+            (r.cold||0) > 0 ? `<span class="badge badge-cold">COLD ${r.cold}</span>` : '',
+            (r.sold||0) > 0 ? `<span class="badge badge-sold">SOLD ${r.sold}</span>` : '',
+            (r.inne||0) > 0 ? `<span class="badge badge-inne">inne ${r.inne}</span>` : ''
+          ].filter(Boolean).join('') || '<span style="color:#cbd5e1;">—</span>';
+
+          return `<tr style="background:${rowBg}">
+            <td style="text-align:center;color:#94a3b8;font-weight:700;">${i+1}</td>
+            <td style="font-weight:700;">
+              ${escHtml(r.osoba)}
+              ${isTop ? '<span class="badge-top">TOP</span>' : ''}
+              ${brak  ? '<span class="badge-brak">BRAK</span>' : ''}
+            </td>
+            <td style="text-align:center;color:#94a3b8;">${r.poprz_wizyty||0}</td>
+            <td style="text-align:center;font-weight:800;font-size:18px;color:${brak?'#ef4444':'#0f172a'};">${r.wizyty||0}</td>
+            <td style="text-align:center;color:${dk};font-weight:700;">${di}</td>
+            <td style="text-align:center;">
+              ${skut !== null
+                ? `<span style="background:${skutKol}18;color:${skutKol};border:1px solid ${skutKol}44;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:700;">${skut}%</span>`
+                : '<span style="color:#cbd5e1;">—</span>'}
+            </td>
+            <td>${tagi}</td>
+            <td>${efekty}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>`;
+
+  // ── Mapa terytorialna ──
+  const mapaArr = Array.isArray(mapa) ? mapa : [];
+  if (mapaArr.length > 0) {
+    html += `<div class="card">
+      <div class="card-title">📍 Gdzie Pracował Handlowiec – Bieżący Tydzień</div>
+      <p style="font-size:12px;color:#94a3b8;margin-bottom:16px;">Miejscowości z zaznaczoną gminą i powiatem · sortowane wg liczby edycji</p>`;
+
+    mapaArr.forEach(ph => {
+      const sredniSek = ph.sredni_czas_sek || 0;
+      html += `<div class="ph-block">
+        <div class="ph-header">
+          <span class="ph-name">👤 ${escHtml(ph.osoba)}</span>
+          ${sredniSek > 0 ? `<span class="ph-avg">Średni czas pracy: <b>${fmtCzas(sredniSek)}</b></span>` : ''}
+        </div>
+        <table>
+          <thead><tr>
+            <th>Miejscowość</th>
+            <th>Gmina / Powiat</th>
+            <th style="text-align:center;">Edycje</th>
+            <th>Dni / Praca w dniu</th>
+            <th>Szybki status / Efekty</th>
+          </tr></thead>
+          <tbody>`;
+
+      const miejsca = Array.isArray(ph.miejsca) ? ph.miejsca : [];
+      miejsca.forEach((m, mi) => {
+        const rowBg = mi % 2 === 0 ? 'white' : '#fafbfc';
+
+        const tagi = m.tagi && typeof m.tagi === 'object'
+          ? Object.entries(m.tagi).sort((a,b)=>b[1]-a[1]).map(([t,c])=>tagBadge(t,c)).join('')
+          : '<span style="color:#cbd5e1;">—</span>';
+
+        const statusy = m.statusy && typeof m.statusy === 'object'
+          ? Object.entries(m.statusy).sort((a,b)=>b[1]-a[1]).map(([s,c]) => {
+              const cls = s==='HL'?'badge-hl':s==='COLD'?'badge-cold':s==='SOLD'?'badge-sold':'badge-inne';
+              return `<span class="badge ${cls}" style="font-size:10px;">${s}:${c}</span>`;
+            }).join('')
+          : '';
+
+        const dniHtml = Array.isArray(m.dni) ? m.dni.map(d => {
+          const dShort = `${d.dzien.substring(8,10)}.${d.dzien.substring(5,7)}`;
+          const durStr = d.dur_sek > 0 ? ` (${fmtCzas(d.dur_sek)})` : '';
+          return `<div class="dni-row">
+            <span class="dni-date">${dShort}</span>:
+            <span class="dni-time">${d.start}-${d.koniec}</span>
+            <span class="dni-dur">${durStr}</span>
+          </div>`;
+        }).join('') : '—';
+
+        html += `<tr style="background:${rowBg}">
+          <td style="font-weight:600;color:#0f172a;">📌 ${escHtml(m.miejscowosc)}</td>
+          <td style="font-size:11px;color:#475569;">${escHtml(m.gmina)}<br><span style="color:#94a3b8;">${escHtml(m.powiat)}</span></td>
+          <td style="text-align:center;font-weight:700;">${m.wizyty||0}</td>
+          <td style="font-size:11px;">${dniHtml}</td>
+          <td>
+            <div style="margin-bottom:4px;">${tagi}</div>
+            ${statusy ? `<div>${statusy}</div>` : ''}
+          </td>
+        </tr>`;
+      });
+
+      html += `</tbody></table></div>`;
+    });
+
+    html += `</div>`;
+  }
+
+  // Stopka
+  html += `<div style="text-align:center;padding:24px;font-size:11px;color:#94a3b8;">
+    Dashboard odświeża się automatycznie co 10 minut
+  </div>`;
+
+  document.getElementById('root').innerHTML = html;
+}
+
+// ─── START ──────────────────────────────────────────────────────────────────
+ladujDane();
+// Auto-odświeżanie co 10 minut
+setInterval(ladujDane, 10 * 60 * 1000);
+</script>
+</body>
+</html>
