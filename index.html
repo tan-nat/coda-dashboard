@@ -395,25 +395,34 @@ function renderuj(stats, ranking, mapa, bezAkt) {
   </div>`;
 
   // ── Mapa terytorialna ──
-  const mapaArr = Array.isArray(mapa) ? mapa : [];
+  // Nowa struktura z SQL: { tydzien, tydzien_od, tydzien_do, dane: [...] }
+  const mapaData  = mapa && mapa.dane ? mapa : { tydzien: 'brak', dane: [] };
+  const mapaArr   = Array.isArray(mapaData.dane) ? mapaData.dane : [];
+  const mapaTydz  = mapaData.tydzien === 'poprzedni'
+    ? `Poprzedni tydzień (${mapaData.tydzien_od||''} – ${mapaData.tydzien_do||(z.poprzedni_ndz||'')})`
+    : `Bieżący tydzień (${mapaData.tydzien_od||''} – dziś)`;
+
   if (mapaArr.length > 0) {
     html += `<div class="card">
-      <div class="card-title">📍 Gdzie Pracował Handlowiec – Bieżący Tydzień</div>
+      <div class="card-title">📍 Gdzie Pracował Handlowiec – ${mapaTydz}</div>
       <p style="font-size:12px;color:#94a3b8;margin-bottom:16px;">Miejscowości z zaznaczoną gminą i powiatem · sortowane wg liczby edycji</p>`;
 
     mapaArr.forEach(ph => {
       const sredniSek = ph.sredni_czas_sek || 0;
+
       html += `<div class="ph-block">
         <div class="ph-header">
           <span class="ph-name">👤 ${escHtml(ph.osoba)}</span>
-          ${sredniSek > 0 ? `<span class="ph-avg">Średni czas pracy: <b>${fmtCzas(sredniSek)}</b></span>` : ''}
+          ${sredniSek > 0
+            ? `<span class="ph-avg">Średni czas pracy: <b>${fmtCzas(sredniSek)}</b></span>`
+            : ''}
         </div>
         <table>
           <thead><tr>
-            <th>Miejscowość</th>
+            <th style="width:130px;">Miejscowość</th>
             <th>Gmina / Powiat</th>
-            <th style="text-align:center;">Edycje</th>
-            <th>Dni / Praca w dniu</th>
+            <th style="text-align:center;width:60px;">Edycje</th>
+            <th style="width:220px;">Dni / Praca w dniu</th>
             <th>Szybki status / Efekty</th>
           </tr></thead>
           <tbody>`;
@@ -422,35 +431,50 @@ function renderuj(stats, ranking, mapa, bezAkt) {
       miejsca.forEach((m, mi) => {
         const rowBg = mi % 2 === 0 ? 'white' : '#fafbfc';
 
-        const tagi = m.tagi && typeof m.tagi === 'object'
-          ? Object.entries(m.tagi).sort((a,b)=>b[1]-a[1]).map(([t,c])=>tagBadge(t,c)).join('')
-          : '<span style="color:#cbd5e1;">—</span>';
+        // Tagi szybkiego statusu
+        const tagi = m.tagi && typeof m.tagi === 'object' && Object.keys(m.tagi).length > 0
+          ? Object.entries(m.tagi).sort((a,b) => b[1]-a[1]).map(([t,c]) => tagBadge(t,c)).join('')
+          : '<span style="color:#cbd5e1;font-size:11px;">brak</span>';
 
+        // Efekty HL/COLD/SOLD
         const statusy = m.statusy && typeof m.statusy === 'object'
-          ? Object.entries(m.statusy).sort((a,b)=>b[1]-a[1]).map(([s,c]) => {
-              const cls = s==='HL'?'badge-hl':s==='COLD'?'badge-cold':s==='SOLD'?'badge-sold':'badge-inne';
+          ? Object.entries(m.statusy).sort((a,b) => b[1]-a[1]).map(([s,c]) => {
+              const cls = s==='HL' ? 'badge-hl' : s==='COLD' ? 'badge-cold' : s==='SOLD' ? 'badge-sold' : 'badge-inne';
               return `<span class="badge ${cls}" style="font-size:10px;">${s}:${c}</span>`;
             }).join('')
           : '';
 
-        const dniHtml = Array.isArray(m.dni) ? m.dni.map(d => {
-          const dShort = `${d.dzien.substring(8,10)}.${d.dzien.substring(5,7)}`;
-          const durStr = d.dur_sek > 0 ? ` (${fmtCzas(d.dur_sek)})` : '';
-          return `<div class="dni-row">
-            <span class="dni-date">${dShort}</span>:
-            <span class="dni-time">${d.start}-${d.koniec}</span>
-            <span class="dni-dur">${durStr}</span>
-          </div>`;
-        }).join('') : '—';
+        // Dni z godzinami – kluczowy widok
+        const dniHtml = Array.isArray(m.dni) && m.dni.length > 0
+          ? m.dni.map(d => {
+              // d.dzien = "2025-02-17"
+              const dShort  = d.dzien ? d.dzien.substring(8,10)+'.'+d.dzien.substring(5,7) : '??';
+              const durStr  = (d.dur_sek||0) > 0 ? ' ('+fmtCzas(d.dur_sek)+')' : '';
+              return `<div class="dni-row">
+                <span class="dni-date">${dShort}:</span>
+                <span class="dni-time"> ${d.start||'?'}–${d.koniec||'?'}</span>
+                <span class="dni-dur">${durStr}</span>
+              </div>`;
+            }).join('')
+          : '<span style="color:#cbd5e1;font-size:11px;">—</span>';
 
-        html += `<tr style="background:${rowBg}">
-          <td style="font-weight:600;color:#0f172a;">📌 ${escHtml(m.miejscowosc)}</td>
-          <td style="font-size:11px;color:#475569;">${escHtml(m.gmina)}<br><span style="color:#94a3b8;">${escHtml(m.powiat)}</span></td>
-          <td style="text-align:center;font-weight:700;">${m.wizyty||0}</td>
-          <td style="font-size:11px;">${dniHtml}</td>
-          <td>
-            <div style="margin-bottom:4px;">${tagi}</div>
-            ${statusy ? `<div>${statusy}</div>` : ''}
+        html += `<tr style="background:${rowBg};vertical-align:top;">
+          <td style="padding:8px 10px;font-weight:600;color:#0f172a;">
+            📌 ${escHtml(m.miejscowosc)}
+          </td>
+          <td style="padding:8px 10px;font-size:11px;color:#475569;">
+            ${escHtml(m.gmina)}<br>
+            <span style="color:#94a3b8;">${escHtml(m.powiat)}</span>
+          </td>
+          <td style="padding:8px 10px;text-align:center;font-weight:700;color:#0f172a;">
+            ${m.wizyty||0}
+          </td>
+          <td style="padding:8px 10px;font-size:11px;line-height:1.7;">
+            ${dniHtml}
+          </td>
+          <td style="padding:8px 10px;">
+            <div style="margin-bottom:5px;">${tagi}</div>
+            ${statusy ? `<div style="margin-top:2px;">${statusy}</div>` : ''}
           </td>
         </tr>`;
       });
